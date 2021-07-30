@@ -1,9 +1,12 @@
+import enum
 import re
 import json
 import time
 import argparse
 import requests
 import pathlib2
+import time
+import random 
 
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs
@@ -53,27 +56,37 @@ def get_episode_no(url):
 
 
 def save_comments(title, titleId, episode_no):
+    def remove_newlines(text):
+        return re.sub(' +', ' ',text.replace('\n', ' '))
+
     comment_page = 1
     all_comments = []
+    key_list = ['userIdNo', 'userName', 'maskedUserId', 'commentNo', 'parentCommentNo', 
+    'contents', 'sympathyCount', 'antipathyCount', 'replyLevel', 'replyAllCount','regTime']
     while True:
         commentList = get_commentList(title, titleId, episode_no, comment_page)
         if commentList:
+            print("total comments:", len(commentList))
             for comment in commentList:
-                all_comments.append(comment['contents'].replace("\n",""))
+                filtered_comment = dict((k, str(comment[k])) for k in key_list if k in comment)
+                filtered_comment['contents'] = remove_newlines(filtered_comment['contents'])
+                all_comments.append('\t'.join(filtered_comment.values()))
         else:
             # mysql에 댓글 저장 원할 시 밑의 주석 해제
             #send_mysql(title, episode_no, all_comments)
             write_all_comments(title, episode_no, all_comments)
             return
         comment_page = comment_page + 1
-
-
+        
+        
 def write_all_comments(title, episode_no, all_comments):
     pathlib2.Path("./data").mkdir(exist_ok=True, parents=True)
     f = open('./data/naver_webtoon_comments.txt', 'a', encoding="utf-8")
+    comment_cols = 'userIdNo\tuserName\tmaskedUserId\tcommentNo\tparentCommentNo\tcontents\tsympathyCount\tantipathyCount\treplyLevel\treplyAllCount\tregTime'
     try:
+        f.write('title' + '\t' + 'episode_no' + '\t' + comment_cols + "\n")
         for comment in all_comments:
-            f.write(title + ',' + episode_no + ',' + comment + "\n")
+            f.write(title + '\t' + episode_no + '\t' + comment + "\n")
     finally:
         f.close()
 
@@ -113,15 +126,26 @@ if __name__ == "__main__":
     naver_webtoon_list_link = 'https://comic.naver.com/webtoon/weekday.nhn'
     all_webtoon_links = get_all_webtoon_links(naver_webtoon_list_link)
 
-    for webtoon_link in all_webtoon_links:
+    for index, webtoon_link in enumerate(all_webtoon_links):
         absolute_path = naver_webtoon_link + webtoon_link
         title = get_title(absolute_path)
         titleId = get_titleId(absolute_path)
         all_episode_link = get_all_episode_link(absolute_path, int(args.number_of_episode))
-
-        for episode_link in all_episode_link:
-            episode_no = get_episode_no(episode_link)
-            comments = save_comments(title, titleId, episode_no)
-            print(title, episode_no)
-            print("Sleep 1 seconds from now on...")
-            time.sleep(1)
+        if index < 61:
+            continue
+        print("===== [", index, "] ", title, "=====")
+        if index == 61:
+            for episode_link in all_episode_link:
+                episode_no = get_episode_no(episode_link)
+                print(title, episode_no)
+                if episode_no in ['147', '146']:
+                    comments = save_comments(title, titleId, episode_no)
+                    random_t = random.uniform(0.9, 1.3)
+                    print("Sleep {} seconds from now on...".format(random_t))
+                    time.sleep(random_t)
+                else:
+                    pass
+            if (1==0):
+                time.sleep(random.uniform(59, 66))
+        else:
+            pass
