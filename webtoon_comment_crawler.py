@@ -65,7 +65,7 @@ def save_comments(title, titleId, episode_no):
     'contents', 'sympathyCount', 'antipathyCount', 'replyLevel', 'replyAllCount','regTime']
     while True:
         commentList = get_commentList(title, titleId, episode_no, comment_page)
-        print("loop", comment_page)
+        # print("loop", comment_page)
         if commentList:
             for comment in commentList:
                 filtered_comment = dict((k, str(comment[k])) for k in key_list if k in comment)
@@ -121,6 +121,7 @@ def get_commentList(title, titleId, episode_no, comment_page):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--number_of_episode', required=False, default=51)
+
     args = parser.parse_args()
 
     naver_webtoon_link = 'https://comic.naver.com'
@@ -132,18 +133,12 @@ if __name__ == "__main__":
         title = get_title(absolute_path)
         titleId = get_titleId(absolute_path)
         all_episode_link = get_all_episode_link(absolute_path, int(args.number_of_episode))
-        if index > 400:
-            print("===== [", index, "] ", title, "=====")
-            for episode_link in all_episode_link:
-                episode_no = get_episode_no(episode_link)
-                print(title, episode_no)
-                if episode_no == '146':
-                    comments = save_comments(title, titleId, episode_no)
-                    random_t = random.uniform(0.9, 1.3)
-                    print("Sleep {} seconds from now on...".format(random_t))
-                    time.sleep(random_t)
-                else:
-                    pass
-            time.sleep(random.uniform(59, 66))
-        else:
-            continue
+        print("===== [", index, "] ", title)
+        for episode_link in all_episode_link:
+            episode_no = get_episode_no(episode_link)
+            print(title, episode_no)
+            comments = save_comments(title, titleId, episode_no)
+            random_t = random.uniform(0.9, 1.3)
+            print("Sleep {} seconds from now on...".format(random_t))
+            time.sleep(random_t)
+        time.sleep(random.uniform(59, 66))
