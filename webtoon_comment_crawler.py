@@ -7,7 +7,7 @@ import requests
 import pathlib2
 import time
 import random 
-
+import os
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs
 
@@ -42,12 +42,19 @@ def get_titleId(url):
     return parse_qs(urlparse(url).query)['titleId'][0]
 
 
-def get_all_episode_link(url, number_of_episode):
+def get_all_episode_link(url, number_of_episode, is_latest):
     bs = getPage(url)
     last_episode_link = bs.find('td', {'class':'title'}).find('a')['href']
     last_episode_no = int(parse_qs(urlparse(last_episode_link).query)['no'][0])
+    all_episode_link = []
     reg = re.compile('no=.*&')
-    all_episode_link = [re.sub(reg, 'no=' + str(i) + '&', last_episode_link) for i in range(last_episode_no, last_episode_no-(number_of_episode), -1) if i > 0]
+    if is_latest:
+        last_no = last_episode_no if last_episode_no <= number_of_episode else number_of_episode
+        epi_range = range(1, last_no+1)
+        all_episode_link = [re.sub(reg, 'no=' + str(i) + '&', last_episode_link) for i in epi_range]
+    else:
+        epi_range = range(last_episode_no, last_episode_no-(number_of_episode), -1)
+        all_episode_link = [re.sub(reg, 'no=' + str(i) + '&', last_episode_link) for i in epi_range if i > 0]
     return all_episode_link
 
 
@@ -83,8 +90,9 @@ def save_comments(title, titleId, episode_no):
         
         
 def write_all_comments(title, episode_no, all_comments):
-    pathlib2.Path("./data").mkdir(exist_ok=True, parents=True)
-    f = open('./data/naver_webtoon_comments.txt', 'a', encoding="utf-8")
+    pathlib2.Path(OUTPUT_PATH).mkdir(exist_ok=True, parents=True)
+    comment_file_name = os.path.join(OUTPUT_PATH, COMMENT_FILE_NAME)
+    f = open(comment_file_name, 'a', encoding="utf-8")
     try:
         for comment in all_comments:
             f.write(title + '\t' + episode_no + '\t' + comment + "\n")
@@ -92,15 +100,37 @@ def write_all_comments(title, episode_no, all_comments):
         f.close()
 
 
-def send_mysql(title, episode_no, all_comments):
-    conn = pymysql.connect(host=mysql_info['host'], user=mysql_info['user'], passwd=mysql_info['passwd'], db=mysql_info['db'])
-    cur = conn.cursor()
-    cur.execute('USE naver')
-    for comment in all_comments:
-        cur.execute('INSERT INTO COMMENT (title, episode_no, comment) VALUES (%s, %s, %s)', (title, episode_no, comment))
-    cur.connection.commit()
-    cur.close()
-    conn.close()
+
+def get_episode_info(title, titleId, episode_no):
+    url = 'https://comic.naver.com/webtoon/detail?titleId={titleId}&no={no}'.format(titleId=titleId, no=episode_no)
+    bs = getPage(url)
+    box_info = bs.find('div', {'class': 'tit_area'})
+    episode_name = box_info.find('h3').get_text()
+    
+    episode_rating = box_info.find('span', {'id': 'topPointTotalNumber'}).find('strong').get_text()
+    episode_total_users = box_info.find('span', {'class': 'pointTotalPerson'}).find('em').get_text()
+
+    episode_reg_date = box_info.find('dl', {'class': 'rt'}).find('dd', {'class': 'date'}).get_text()
+    episode_info = [title, titleId, url, episode_name, episode_rating, episode_total_users, episode_reg_date]
+    return episode_info
+    
+
+def write_episode_info(episode_info):
+    pathlib2.Path(OUTPUT_PATH).mkdir(exist_ok=True, parents=True)
+    episode_file_name = os.path.join(OUTPUT_PATH, EPISODE_FILE_NAME)
+    f = open(episode_file_name, 'a', encoding="utf-8")
+    try:
+        episode_info = '\t'.join(episode_info)
+        f.write(episode_info + "\n")
+    finally:
+        f.close()
+
+
+
+def save_episode_info(title, titleId, episode_no):
+    episode_info = get_episode_info(title, titleId, episode_no)
+    write_episode_info(episode_info)
+    return
 
 
 def get_commentList(title, titleId, episode_no, comment_page):
@@ -118,26 +148,65 @@ def get_commentList(title, titleId, episode_no, comment_page):
     return commentList
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--number_of_episode', required=False, default=51)
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('--number_of_episode', required=False, default=51)
 
+#     args = parser.parse_args()
+
+#     naver_webtoon_link = 'https://comic.naver.com'
+#     naver_webtoon_list_link = 'https://comic.naver.com/webtoon/weekday.nhn'
+#     all_webtoon_links = get_all_webtoon_links(naver_webtoon_list_link)
+
+#     for index, webtoon_link in enumerate(all_webtoon_links):
+#         absolute_path = naver_webtoon_link + webtoon_link
+#         title = get_title(absolute_path)
+#         titleId = get_titleId(absolute_path)
+#         all_episode_link = get_all_episode_link(absolute_path, int(args.number_of_episode))
+#         print("===== [", index, "] ", title)
+#         for episode_link in all_episode_link:
+#             episode_no = get_episode_no(episode_link)
+#             print(title, episode_no)
+#             comments = save_comments(title, titleId, episode_no)
+#             random_t = random.uniform(0.9, 1.3)
+#             print("Sleep {} seconds from now on...".format(random_t))
+#             time.sleep(random_t)
+#         time.sleep(random.uniform(59, 66))
+
+
+if __name__ == "__main__":
+
+    OUTPUT_PATH = './data'
+    COMMENT_FILE_NAME = 'naver_webtoon_comments.txt'
+    EPISODE_FILE_NAME = 'naver_webtoon_episode_info.txt'
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--number_of_episode', required=False, default=10)
+    parser.add_argument('--is_latest', required=False, default=False)
     args = parser.parse_args()
 
     naver_webtoon_link = 'https://comic.naver.com'
     naver_webtoon_list_link = 'https://comic.naver.com/webtoon/weekday.nhn'
     all_webtoon_links = get_all_webtoon_links(naver_webtoon_list_link)
-
     for index, webtoon_link in enumerate(all_webtoon_links):
+        if index > 1:
+            continue
         absolute_path = naver_webtoon_link + webtoon_link
         title = get_title(absolute_path)
         titleId = get_titleId(absolute_path)
-        all_episode_link = get_all_episode_link(absolute_path, int(args.number_of_episode))
+        all_episode_link = get_all_episode_link(absolute_path, int(args.number_of_episode), int(args.is_latest))
         print("===== [", index, "] ", title)
         for episode_link in all_episode_link:
             episode_no = get_episode_no(episode_link)
             print(title, episode_no)
-            comments = save_comments(title, titleId, episode_no)
+            
+            # comments
+            # save_comments(title, titleId, episode_no)
+
+            # episode
+            # save_episode_info(title, titleId, episode_no)
+            episode_info = get_episode_info(title, titleId, episode_no)
+            write_episode_info(episode_info)
             random_t = random.uniform(0.9, 1.3)
             print("Sleep {} seconds from now on...".format(random_t))
             time.sleep(random_t)
