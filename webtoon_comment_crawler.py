@@ -48,6 +48,9 @@ def get_all_episode_link(url, number_of_episode, is_latest):
     last_episode_no = int(parse_qs(urlparse(last_episode_link).query)['no'][0])
     all_episode_link = []
     reg = re.compile('no=.*&')
+    if number_of_episode == -1:
+        number_of_episode = last_episode_no
+
     if is_latest:
         last_no = last_episode_no if last_episode_no <= number_of_episode else number_of_episode
         epi_range = range(1, last_no+1)
@@ -199,12 +202,12 @@ if __name__ == "__main__":
         for episode_link in all_episode_link:
             episode_no = get_episode_no(episode_link)
             print(title, episode_no)
-            
-            # comments
-            # save_comments(title, titleId, episode_no)
 
-            # episode
-            # save_episode_info(title, titleId, episode_no)
+            # save comments
+            save_comments(title, titleId, episode_no)
+
+            # save episode infomation
+            save_episode_info(title, titleId, episode_no)
             episode_info = get_episode_info(title, titleId, episode_no)
             write_episode_info(episode_info)
             random_t = random.uniform(0.9, 1.3)
